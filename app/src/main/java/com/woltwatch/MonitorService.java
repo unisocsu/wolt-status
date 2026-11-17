@@ -112,13 +112,13 @@ public class MonitorService extends Service {
     }
 
     private Notification ongoing(String text) {
-        return builder(CH_ONGOING).setSmallIcon(android.R.drawable.ic_dialog_info)
+        return builder(CH_ONGOING).setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle("Wolt Watch").setContentText(text)
                 .setContentIntent(openApp()).setOngoing(true).build();
     }
 
     private void alert(WatchStore.Watch w, WoltClient.Status st) {
-        Notification.Builder b = builder(CH_ALERT).setSmallIcon(android.R.drawable.ic_dialog_info)
+        Notification.Builder b = builder(CH_ALERT).setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle(w.name + " פתוחה עכשיו!").setContentText(st.text)
                 .setContentIntent(openApp()).setAutoCancel(true);
         if (Build.VERSION.SDK_INT < 26) {
