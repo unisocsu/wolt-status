@@ -187,9 +187,13 @@ def bundle_probe(html):
             if key not in found:
                 ctx = js[max(0, m.start() - 150):m.end() + 150].replace("\n", " ")
                 found[key] = (u.rsplit("/", 1)[-1], ctx)
-    print(f"\n{len(found)} distinct candidate patterns:\n")
+    lines = [f"{len(found)} distinct candidate patterns from {len(srcs)} bundles\n"]
     for key, (bundle, ctx) in sorted(found.items()):
-        print(f"* {key}\n    in {bundle}\n    ...{ctx}...\n")
+        lines.append(f"* {key}\n    in {bundle}\n    ...{ctx}...\n")
+    report = "\n".join(lines)
+    with open(os.path.join(OUT_DIR, "0b_bundle_endpoints.txt"), "w", encoding="utf-8") as f:
+        f.write(report)
+    print(report[:MAX_BODY])
 
 
 def main():
