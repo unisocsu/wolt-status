@@ -1,0 +1,24 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.woltwatch'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.woltwatch"
+        minSdk 19
+        targetSdk 28
+        versionCode 1
+        versionName "0.1"
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    buildTypes {
+        release { minifyEnabled false }
+    }
+}
+// no dependencies on purpose: no AndroidX, only the platform SDK
