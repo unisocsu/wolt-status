@@ -124,12 +124,54 @@ def find_item_by_slug(obj, slug):
     return None
 
 
+def page_probe(url):
+    """Fetches the public venue web page and prints status-related snippets."""
+    print("=" * 78)
+    print("[0 venue web page HTML]")
+    print(f"GET {url}")
+    headers = dict(HEADERS)
+    headers["Accept"] = "text/html,application/xhtml+xml"
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            status, html = resp.status, resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        status, html = e.code, e.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        print(f"-> error={e!r}")
+        return
+    print(f"-> status={status} length={len(html)} chars")
+    with open(os.path.join(OUT_DIR, "0_venue_page.html"), "w", encoding="utf-8") as f:
+        f.write(html)
+
+    # embedded JSON blocks (state of the page)
+    for m in re.finditer(r'<script[^>]*(?:application/(?:ld\+)?json|__NEXT_DATA__)[^>]*>(.*?)</script>',
+                         html, re.S):
+        print(f"\n--- embedded JSON block ({len(m.group(1))} chars), first 3000: ---")
+        print(m.group(1)[:3000])
+
+    # context around keywords that hint at open/closed state
+    print("\n--- keyword snippets ---")
+    seen = 0
+    for m in re.finditer(r'(?i)(temporarily offline|offline|"online"|is_online|isOnline|'
+                         r'closed|opens at|delivery_open|ordering_unavailable)', html):
+        s = max(0, m.start() - 120)
+        print("...", html[s:m.end() + 160].replace("\n", " "), "...")
+        seen += 1
+        if seen >= 25:
+            break
+    if not seen:
+        print("(no keywords found in the HTML; the page is probably rendered client-side)")
+
+
 def main():
     url = os.environ.get("WOLT_URL", "").strip()
     if not url:
         sys.exit("WOLT_URL is empty")
     country, city, slug = parse_url(url)
     print(f"Parsed: country={country!r} city={city!r} slug={slug!r}")
+
+    page_probe(url)
 
     lat = os.environ.get("WOLT_LAT", "").strip()
     lon = os.environ.get("WOLT_LON", "").strip()
