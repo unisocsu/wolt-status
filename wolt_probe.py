@@ -196,6 +196,25 @@ def bundle_probe(html):
     print(report[:MAX_BODY])
 
 
+def coords_from_page(html):
+    """Venue coordinates [lon, lat] from the page's embedded query-state JSON."""
+    m = re.search(r'<script type="application/json" class="query-state">(.*?)</script>', html, re.S)
+    if not m:
+        return None
+    try:
+        state = json.loads(m.group(1))
+    except ValueError:
+        return None
+    for q in state.get("queries", []):
+        key = q.get("queryKey") or []
+        if key[:2] == ["venue", "static"]:
+            data = (q.get("state") or {}).get("data") or {}
+            coords = ((data.get("venue_raw") or {}).get("location") or {}).get("coordinates")
+            if coords and len(coords) == 2:
+                return coords[1], coords[0]
+    return None
+
+
 def main():
     url = os.environ.get("WOLT_URL", "").strip()
     if not url:
@@ -203,51 +222,34 @@ def main():
     country, city, slug = parse_url(url)
     print(f"Parsed: country={country!r} city={city!r} slug={slug!r}")
 
-    html = page_probe(url)
-    if html:
-        bundle_probe(html)
-
     lat = os.environ.get("WOLT_LAT", "").strip()
     lon = os.environ.get("WOLT_LON", "").strip()
 
-    # 1. static venue info (usually contains 'online', opening_times, coordinates)
-    _, static = fetch("1 restaurant-api v3 venue by slug",
-                      f"https://restaurant-api.wolt.com/v3/venues/slug/{slug}")
-
-    if (not lat or not lon) and static:
-        c = find_coords(static)
+    # 0. the public web page (also gives us the venue's coordinates)
+    html = page_probe(url)
+    if (not lat or not lon) and html:
+        c = coords_from_page(html)
         if c:
             lat, lon = str(c[0]), str(c[1])
-            print(f"\nCoordinates taken from the venue's own data: lat={lat} lon={lon}")
+            print(f"\nCoordinates taken from the page data: lat={lat} lon={lon}")
+    if os.environ.get("WOLT_SCAN_BUNDLES") == "1" and html:
+        bundle_probe(html)
 
     if not lat or not lon:
-        print("\nNo coordinates available, skipping location-based endpoints.")
-        return
+        sys.exit("No coordinates available; pass WOLT_LAT / WOLT_LON")
 
-    # 2. dynamic venue info (candidate endpoints, may need adjustment)
+    # Endpoints found in the site's own JS bundles (previous run)
+    web_headers = {"App-Language": "en", "App-Locale": "en-IL"}
+    HEADERS.update(web_headers)
     q = urllib.parse.urlencode({"lat": lat, "lon": lon})
-    candidates = [
-        ("2a consumer-api order-xp dynamic",
-         f"https://consumer-api.wolt.com/order-xp/web/v1/venue/slug/{slug}/dynamic/?{q}"),
-        ("2b consumer-api venue-content-api dynamic",
-         f"https://consumer-api.wolt.com/venue-content-api/v3/venues/slug/{slug}/dynamic/?{q}"),
-        ("2c restaurant-api dynamic",
-         f"https://restaurant-api.wolt.com/v4/venues/slug/{slug}/dynamic/?{q}"),
-    ]
-    for label, u in candidates:
-        fetch(label, u)
+    base = "https://consumer-api.wolt.com"
 
-    # 3. discovery page around the location; find our venue inside it
-    status, page = fetch("3 consumer-api discovery restaurants (raw, may be large)",
-                         f"https://consumer-api.wolt.com/v1/pages/restaurants?{q}")
-    if page:
-        item = find_item_by_slug(page, slug)
-        print("\n" + "=" * 78)
-        print("[3b our venue inside the discovery page]")
-        if item:
-            print(json.dumps(item, ensure_ascii=False, indent=2)[:MAX_BODY])
-        else:
-            print("Venue not found in the discovery page (maybe it does not deliver to this point).")
+    fetch("2 order-xp web venue DYNAMIC (live status)",
+          f"{base}/order-xp/web/v1/venue/slug/{slug}/dynamic/?{q}")
+    fetch("3 order-xp web venue static",
+          f"{base}/order-xp/web/v1/pages/venue/slug/{slug}/static")
+    fetch("4 venue-content-api web venue content",
+          f"{base}/consumer-api/venue-content-api/v3/web/venue-content/slug/{slug}")
 
 
 if __name__ == "__main__":
