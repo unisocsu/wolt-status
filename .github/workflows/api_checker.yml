@@ -1,0 +1,41 @@
+name: Wolt probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Wolt venue page link"
+        required: true
+        type: string
+      lat:
+        description: "Latitude (optional)"
+        required: false
+        type: string
+      lon:
+        description: "Longitude (optional)"
+        required: false
+        type: string
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run probe
+        env:
+          WOLT_URL: ${{ inputs.url }}
+          WOLT_LAT: ${{ inputs.lat }}
+          WOLT_LON: ${{ inputs.lon }}
+        run: python wolt_probe.py
+
+      - name: Upload full responses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolt-responses
+          path: out/
