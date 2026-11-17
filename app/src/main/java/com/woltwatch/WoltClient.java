@@ -1,7 +1,6 @@
 package com.woltwatch;
 
 import android.net.Uri;
-import android.os.Build;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -10,16 +9,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.InetAddress;
-import java.net.Socket;
 import java.net.URL;
 import java.util.List;
 import java.util.Locale;
 
 import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
 
 /** Talks to the endpoints the Wolt website itself uses (unofficial, may change). */
 public class WoltClient {
@@ -82,15 +76,7 @@ public class WoltClient {
 
     private static String get(String u) throws IOException {
         HttpsURLConnection c = (HttpsURLConnection) new URL(u).openConnection();
-        if (Build.VERSION.SDK_INT < 21) {
-            try {
-                SSLContext ctx = SSLContext.getInstance("TLSv1.2");
-                ctx.init(null, null, null);
-                c.setSSLSocketFactory(new Tls12SocketFactory(ctx.getSocketFactory()));
-            } catch (Exception e) {
-                throw new IOException("TLS 1.2 לא זמין: " + e);
-            }
-        }
+        Tls.apply(c);
         c.setConnectTimeout(15000);
         c.setReadTimeout(15000);
         c.setRequestProperty("User-Agent",
@@ -114,33 +100,5 @@ public class WoltClient {
             throw new IOException("HTTP " + code + (b.length() > 160 ? " " + b.substring(0, 160) : " " + b));
         }
         return sb.toString();
-    }
-
-    /** Enables TLS 1.1/1.2 on old Android versions where they are off by default. */
-    static class Tls12SocketFactory extends SSLSocketFactory {
-        private final SSLSocketFactory d;
-
-        Tls12SocketFactory(SSLSocketFactory delegate) { this.d = delegate; }
-
-        private Socket fix(Socket s) {
-            if (s instanceof SSLSocket) {
-                ((SSLSocket) s).setEnabledProtocols(new String[]{"TLSv1.1", "TLSv1.2"});
-            }
-            return s;
-        }
-
-        @Override public String[] getDefaultCipherSuites() { return d.getDefaultCipherSuites(); }
-        @Override public String[] getSupportedCipherSuites() { return d.getSupportedCipherSuites(); }
-        @Override public Socket createSocket(Socket s, String h, int p, boolean a) throws IOException {
-            return fix(d.createSocket(s, h, p, a));
-        }
-        @Override public Socket createSocket(String h, int p) throws IOException { return fix(d.createSocket(h, p)); }
-        @Override public Socket createSocket(String h, int p, InetAddress la, int lp) throws IOException {
-            return fix(d.createSocket(h, p, la, lp));
-        }
-        @Override public Socket createSocket(InetAddress h, int p) throws IOException { return fix(d.createSocket(h, p)); }
-        @Override public Socket createSocket(InetAddress h, int p, InetAddress la, int lp) throws IOException {
-            return fix(d.createSocket(h, p, la, lp));
-        }
     }
 }

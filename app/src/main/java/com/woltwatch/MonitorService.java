@@ -7,33 +7,33 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-/** Foreground service: checks the venue every minute, alerts when it goes closed -> open. */
+/**
+ * Foreground service: every minute checks all watched venues one after another and posts an
+ * alert for each venue that went closed -> open.
+ */
 public class MonitorService extends Service {
 
     static final int ID_ONGOING = 1;
-    static final int ID_ALERT = 2;
+    static final int ID_ALERT_BASE = 1000;
     static final String CH_ONGOING = "ongoing";
     static final String CH_ALERT = "alert";
     static final long PERIOD_SECONDS = 60;
 
     private ScheduledExecutorService executor;
     private PowerManager.WakeLock wakeLock;
-    private SharedPreferences sp;
-    private int errors = 0;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        sp = getSharedPreferences("watch", MODE_PRIVATE);
-        if (!sp.getBoolean("running", false)) {
+        if (!WatchStore.isRunning(this)) {
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -45,33 +45,51 @@ public class MonitorService extends Service {
             wakeLock.acquire();
             executor = Executors.newSingleThreadScheduledExecutor();
             executor.scheduleWithFixedDelay(new Runnable() {
-                @Override public void run() { check(); }
+                @Override public void run() { checkAll(); }
             }, 0, PERIOD_SECONDS, TimeUnit.SECONDS);
         }
         return START_STICKY;
     }
 
-    private void check() {
-        String slug = sp.getString("slug", "");
-        String name = sp.getString("name", slug);
+    private void checkAll() {
         try {
-            double lat = Double.parseDouble(sp.getString("lat", "0"));
-            double lon = Double.parseDouble(sp.getString("lon", "0"));
-            WoltClient.Status st = WoltClient.fetchStatus(slug, lat, lon);
-            int prev = sp.getInt("last_open", -1);
-            int now = st.open ? 1 : 0;
-            sp.edit().putInt("last_open", now).putString("last_text", st.text)
-                    .putString("next_open", st.nextOpen).putString("error", "")
-                    .putLong("last_check", System.currentTimeMillis()).apply();
-            errors = 0;
-            if (prev == 0 && now == 1) alert(name, st.text);
-            notifyOngoing(name + ": " + (st.open ? "פתוחה" : "סגורה") + " – " + st.text);
-        } catch (Exception e) {
-            errors++;
-            sp.edit().putString("error", String.valueOf(e))
-                    .putLong("last_check", System.currentTimeMillis()).apply();
-            if (errors >= 3) notifyOngoing("שגיאה בבדיקה: " + e.getMessage());
+            List<WatchStore.Watch> list = WatchStore.load(this);
+            if (list.isEmpty()) {
+                WatchStore.setRunning(this, false);
+                stopSelf();
+                return;
+            }
+            for (WatchStore.Watch w : list) {
+                try {
+                    WoltClient.Status st = WoltClient.fetchStatus(w.slug,
+                            Double.parseDouble(w.lat), Double.parseDouble(w.lon));
+                    int prev = WatchStore.record(this, w.slug, st, null);
+                    if (prev == 0 && st.open) alert(w, st);
+                } catch (InterruptedException ie) {
+                    return;
+                } catch (Exception e) {
+                    WatchStore.record(this, w.slug, null, String.valueOf(e));
+                }
+                Thread.sleep(500); // be gentle with the server
+            }
+            updateOngoingSummary();
+        } catch (InterruptedException ie) {
+            // service is stopping
+        } catch (Throwable t) {
+            // never let the scheduled task die
         }
+    }
+
+    private void updateOngoingSummary() {
+        List<WatchStore.Watch> list = WatchStore.load(this);
+        int open = 0, err = 0;
+        for (WatchStore.Watch w : list) {
+            if (w.lastOpen == 1) open++;
+            if (w.error.length() > 0) err++;
+        }
+        String s = list.size() + " חנויות במעקב · " + open + " פתוחות";
+        if (err > 0) s += " · " + err + " עם שגיאה";
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(ID_ONGOING, ongoing(s));
     }
 
     private void createChannels() {
@@ -79,7 +97,7 @@ public class MonitorService extends Service {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             nm.createNotificationChannel(new NotificationChannel(CH_ONGOING, "מעקב פעיל",
                     NotificationManager.IMPORTANCE_LOW));
-            nm.createNotificationChannel(new NotificationChannel(CH_ALERT, "החנות נפתחה",
+            nm.createNotificationChannel(new NotificationChannel(CH_ALERT, "חנות נפתחה",
                     NotificationManager.IMPORTANCE_HIGH));
         }
     }
@@ -99,18 +117,15 @@ public class MonitorService extends Service {
                 .setContentIntent(openApp()).setOngoing(true).build();
     }
 
-    private void notifyOngoing(String text) {
-        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(ID_ONGOING, ongoing(text));
-    }
-
-    private void alert(String name, String text) {
+    private void alert(WatchStore.Watch w, WoltClient.Status st) {
         Notification.Builder b = builder(CH_ALERT).setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle(name + " פתוחה עכשיו!").setContentText(text)
+                .setContentTitle(w.name + " פתוחה עכשיו!").setContentText(st.text)
                 .setContentIntent(openApp()).setAutoCancel(true);
         if (Build.VERSION.SDK_INT < 26) {
             b.setDefaults(Notification.DEFAULT_ALL).setPriority(Notification.PRIORITY_HIGH);
         }
-        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(ID_ALERT, b.build());
+        int id = ID_ALERT_BASE + Math.abs(w.slug.hashCode() % 100000); // one notification per venue
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(id, b.build());
     }
 
     @Override

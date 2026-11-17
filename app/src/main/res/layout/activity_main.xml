@@ -5,18 +5,25 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="הדבק קישור לדף חנות בוולט"
-        android:textSize="16sp" />
+        android:orientation="horizontal">
 
-    <EditText
-        android:id="@+id/url"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="https://wolt.com/.../restaurant/..."
-        android:inputType="textUri" />
+        <EditText
+            android:id="@+id/url"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="קישור לדף חנות בוולט"
+            android:inputType="textUri" />
+
+        <Button
+            android:id="@+id/add"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="הוסף" />
+    </LinearLayout>
 
     <Button
         android:id="@+id/toggle"
@@ -25,9 +32,24 @@
         android:text="התחל מעקב" />
 
     <TextView
-        android:id="@+id/status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="16dp"
-        android:textSize="18sp" />
+        android:paddingTop="8dp"
+        android:text="לחיצה ארוכה על חנות להסרה"
+        android:textSize="12sp" />
+
+    <ListView
+        android:id="@+id/list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:id="@+id/empty"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="אין חנויות במעקב עדיין"
+        android:textSize="16sp" />
 </LinearLayout>

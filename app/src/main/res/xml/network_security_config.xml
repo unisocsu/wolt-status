@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 7+ (API 24+): trust system roots, user-installed roots, and the bundled root list. -->
+<network-security-config>
+    <base-config>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+            <certificates src="@raw/cacerts" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
