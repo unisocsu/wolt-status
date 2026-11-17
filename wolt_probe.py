@@ -139,7 +139,7 @@ def page_probe(url):
         status, html = e.code, e.read().decode("utf-8", errors="replace")
     except Exception as e:
         print(f"-> error={e!r}")
-        return
+        return ""
     print(f"-> status={status} length={len(html)} chars")
     with open(os.path.join(OUT_DIR, "0_venue_page.html"), "w", encoding="utf-8") as f:
         f.write(html)
@@ -162,6 +162,34 @@ def page_probe(url):
             break
     if not seen:
         print("(no keywords found in the HTML; the page is probably rendered client-side)")
+    return html
+
+
+def bundle_probe(html):
+    """Downloads the page's JS bundles and lists URL patterns that look like
+    the live (dynamic) venue-status endpoint the web client calls."""
+    print("=" * 78)
+    print("[0b JS bundles: searching for the live venue-status endpoint]")
+    srcs = re.findall(r'<script[^>]+src="(https://wolt-com-static-assets\.wolt\.com/[^"]+\.js)"', html)
+    print(f"{len(srcs)} bundles found")
+    pat = re.compile(r'["\'`]([^"\'`\s]{0,120}(?:/dynamic|venue-content|order-xp|/venues/slug|pages/venue)[^"\'`\s]{0,120})["\'`]')
+    found = {}
+    for u in srcs:
+        try:
+            req = urllib.request.Request(u, headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=30) as r:
+                js = r.read().decode("utf-8", errors="replace")
+        except Exception as e:
+            print(f"  skip {u.rsplit('/', 1)[-1]}: {e!r}")
+            continue
+        for m in pat.finditer(js):
+            key = m.group(1)
+            if key not in found:
+                ctx = js[max(0, m.start() - 150):m.end() + 150].replace("\n", " ")
+                found[key] = (u.rsplit("/", 1)[-1], ctx)
+    print(f"\n{len(found)} distinct candidate patterns:\n")
+    for key, (bundle, ctx) in sorted(found.items()):
+        print(f"* {key}\n    in {bundle}\n    ...{ctx}...\n")
 
 
 def main():
@@ -171,7 +199,9 @@ def main():
     country, city, slug = parse_url(url)
     print(f"Parsed: country={country!r} city={city!r} slug={slug!r}")
 
-    page_probe(url)
+    html = page_probe(url)
+    if html:
+        bundle_probe(html)
 
     lat = os.environ.get("WOLT_LAT", "").strip()
     lon = os.environ.get("WOLT_LON", "").strip()
