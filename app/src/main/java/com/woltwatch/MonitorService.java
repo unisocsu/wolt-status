@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -33,13 +34,20 @@ public class MonitorService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // startForegroundService() obliges us to call startForeground() quickly, so always do it first
+        createChannels();
+        try {
+            goForeground(ongoing("מתחיל מעקב…"));
+        } catch (RuntimeException e) {
+            stopSelf();               // the system does not allow a foreground start right now
+            return START_NOT_STICKY;
+        }
         if (!WatchStore.isRunning(this)) {
+            stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
         }
         if (executor == null) {
-            createChannels();
-            startForeground(ID_ONGOING, ongoing("מתחיל מעקב…"));
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "woltwatch:check");
             wakeLock.acquire();
@@ -49,6 +57,14 @@ public class MonitorService extends Service {
             }, 0, PERIOD_SECONDS, TimeUnit.SECONDS);
         }
         return START_STICKY;
+    }
+
+    private void goForeground(Notification n) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(ID_ONGOING, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(ID_ONGOING, n);
+        }
     }
 
     private void checkAll() {
@@ -108,7 +124,9 @@ public class MonitorService extends Service {
     }
 
     private PendingIntent openApp() {
-        return PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), 0);
+        int f = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) f |= PendingIntent.FLAG_IMMUTABLE; // required from Android 12
+        return PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), f);
     }
 
     private Notification ongoing(String text) {

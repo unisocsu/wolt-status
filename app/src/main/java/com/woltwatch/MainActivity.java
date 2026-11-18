@@ -1,14 +1,22 @@
 package com.woltwatch;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -30,7 +38,7 @@ public class MainActivity extends Activity {
     private ArrayAdapter<WatchStore.Watch> adapter;
     private final List<WatchStore.Watch> items = new ArrayList<WatchStore.Watch>();
     private String lastSignature = "";
-    private final Handler handler = new Handler();
+    private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
             render();
@@ -42,6 +50,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         setContentView(R.layout.activity_main);
+        applyInsets(findViewById(R.id.root));
         urlInput = (EditText) findViewById(R.id.url);
         addBtn = (Button) findViewById(R.id.add);
         toggle = (Button) findViewById(R.id.toggle);
@@ -141,9 +150,72 @@ public class MainActivity extends Activity {
             }
             WatchStore.setRunning(this, true);
             Intent i = new Intent(this, MonitorService.class);
-            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
+            try {
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
+            } catch (RuntimeException e) {
+                WatchStore.setRunning(this, false);
+                Toast.makeText(this, "לא ניתן להפעיל את השירות: " + e, Toast.LENGTH_LONG).show();
+                render();
+                return;
+            }
+            askPermissions();
         }
         render();
+    }
+
+    /** Android 13+: notification permission first, then (once) the battery-optimization exemption. */
+    private void askPermissions() {
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 100);
+        } else {
+            askBatteryExemption();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        super.onRequestPermissionsResult(code, perms, results);
+        askBatteryExemption();
+    }
+
+    /** Without it Doze (Android 6+) pauses network access when the screen is off. Asked only once. */
+    private void askBatteryExemption() {
+        if (Build.VERSION.SDK_INT < 23) return;
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        if (pm.isIgnoringBatteryOptimizations(getPackageName())) return;
+        SharedPreferences ui = getSharedPreferences("ui", MODE_PRIVATE);
+        if (ui.getBoolean("asked_battery", false)) return;
+        ui.edit().putBoolean("asked_battery", true).apply();
+        try {
+            startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + getPackageName())));
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Android 15+ draws apps edge-to-edge: keep the content clear of the system bars. */
+    private void applyInsets(final View root) {
+        if (Build.VERSION.SDK_INT < 20) return;
+        final int pl = root.getPaddingLeft(), pt = root.getPaddingTop();
+        final int pr = root.getPaddingRight(), pb = root.getPaddingBottom();
+        root.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override public WindowInsets onApplyWindowInsets(View v, WindowInsets in) {
+                int l, t, r, b;
+                if (Build.VERSION.SDK_INT >= 30) {
+                    int mask = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout();
+                    if (Build.VERSION.SDK_INT >= 35) mask |= WindowInsets.Type.ime();
+                    android.graphics.Insets i = in.getInsets(mask);
+                    l = i.left; t = i.top; r = i.right; b = i.bottom;
+                } else {
+                    l = in.getSystemWindowInsetLeft(); t = in.getSystemWindowInsetTop();
+                    r = in.getSystemWindowInsetRight(); b = in.getSystemWindowInsetBottom();
+                }
+                v.setPadding(pl + l, pt + t, pr + r, pb + b);
+                return in;
+            }
+        });
+        root.requestApplyInsets();
     }
 
     private void render() {

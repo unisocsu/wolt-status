@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace 'com.woltwatch'
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.woltwatch"
         minSdk 19
-        targetSdk 28
-        versionCode 1
-        versionName "0.1"
+        targetSdk 36
+        versionCode 3
+        versionName "0.3"
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

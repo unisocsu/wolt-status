@@ -15,8 +15,12 @@ public class BootReceiver extends BroadcastReceiver {
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a);
         if (!ok) return;
         if (WatchStore.isRunning(ctx) && !WatchStore.load(ctx).isEmpty()) {
-            Intent i = new Intent(ctx, MonitorService.class);
-            if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i); else ctx.startService(i);
+            try {
+                Intent i = new Intent(ctx, MonitorService.class);
+                if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i); else ctx.startService(i);
+            } catch (RuntimeException e) {
+                // the system refused a background start; the user can start monitoring from the app
+            }
         }
     }
 }
