@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wroot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:padding="10dp">
+
+    <TextView
+        android:id="@+id/wtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Wolt Watch"
+        android:textColor="#FF7FD6E8"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <TextView android:id="@+id/w1" android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" android:textColor="#FFFFFFFF" android:textSize="13sp" />
+    <TextView android:id="@+id/w2" android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" android:textColor="#FFFFFFFF" android:textSize="13sp" />
+    <TextView android:id="@+id/w3" android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" android:textColor="#FFFFFFFF" android:textSize="13sp" />
+    <TextView android:id="@+id/w4" android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" android:textColor="#FFFFFFFF" android:textSize="13sp" />
+    <TextView android:id="@+id/w5" android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" android:textColor="#FFFFFFFF" android:textSize="13sp" />
+</LinearLayout>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 7+ (API 24+): trust system roots, user-installed roots, and the bundled root list. -->
+<!-- Android 7+ (API 24+): trust system roots, user-installed roots and the bundled root list. Cleartext is allowed only so a self-hosted ntfy / local webhook over http works; Wolt itself is always https. -->
 <network-security-config>
-    <base-config>
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />
